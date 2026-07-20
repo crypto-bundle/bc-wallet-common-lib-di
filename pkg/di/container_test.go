@@ -24,7 +24,7 @@ func TestConainerProvider_Resolving(t *testing.T) {
 
 		registry := NewDependencyRegistry()
 		errFmtSvc := newErrFormatter()
-		defaultDepList := []DIOptions{RegistryOpt(registry), ErrorFormatterOpt(errFmtSvc)}
+		defaultDepList := []DIOptions{ConRegistryOpt(registry), ConErrorFormatterOpt(errFmtSvc)}
 
 		err := DIMustWith[slog.Logger](defaultDepList...).RegisterLazy(LoggerDepUnitType, func() *slog.Logger {
 			return slog.New(slog.NewTextHandler(testWriter{t: t}, nil))
@@ -54,9 +54,14 @@ func TestConainerProvider_ResolvingMultiple(t *testing.T) {
 		const LoggerDepUnitType ContainerUnitType = 1
 		const SomeDepUnitType ContainerUnitType = 2
 
-		registry := NewDependencyRegistry()
 		errFmtSvc := newErrFormatter()
-		defaultDepList := []DIOptions{RegistryOpt(registry), ErrorFormatterOpt(errFmtSvc)}
+		loggerSvc := slog.New(slog.NewTextHandler(testWriter{t: t}, nil))
+
+		registrySvc := NewDependencyRegistryWith([]RegistryOptions{
+			RegistryErrFmtOpt(errFmtSvc),
+			RegistryLoggerOpt(loggerSvc)}...)
+
+		defaultDepList := []DIOptions{ConRegistryOpt(registrySvc), ConErrorFormatterOpt(errFmtSvc)}
 
 		type someDepStruct struct {
 			log *slog.Logger

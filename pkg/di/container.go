@@ -59,7 +59,7 @@ func (opt diOptFn) configureParams(opts *diOptionsParams) error {
 	return opt(opts)
 }
 
-func ErrorFormatterOpt(errFmtSvc errorFormatterService) DIOptions {
+func ConErrorFormatterOpt(errFmtSvc errorFormatterService) DIOptions {
 	return diOptFn(func(opts *diOptionsParams) error {
 		var svc errorFormatterService = errFmtSvc
 
@@ -73,7 +73,7 @@ func ErrorFormatterOpt(errFmtSvc errorFormatterService) DIOptions {
 	})
 }
 
-func LoggerOpt(loggerSvc *slog.Logger) DIOptions {
+func ConLoggerOpt(loggerSvc *slog.Logger) DIOptions {
 	return diOptFn(func(opts *diOptionsParams) error {
 		var slogSvc *slog.Logger = loggerSvc
 
@@ -87,7 +87,7 @@ func LoggerOpt(loggerSvc *slog.Logger) DIOptions {
 	})
 }
 
-func RegistryOpt(registrySvc dependencyRegistryService) DIOptions {
+func ConRegistryOpt(registrySvc dependencyRegistryService) DIOptions {
 	return diOptFn(func(opts *diOptionsParams) error {
 		var svc dependencyRegistryService = registrySvc
 
