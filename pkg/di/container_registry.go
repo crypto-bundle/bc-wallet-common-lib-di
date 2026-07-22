@@ -14,6 +14,51 @@ var (
 	ErrDependencyObjectMissing     = errors.New("dependency object is not exists")
 )
 
+// SubOpt configures options for subscribing to JetStream consumers.
+type RegistryOptions interface {
+	configureParams(opts *registyOptionsParams) error
+}
+
+type registyOptionsParams struct {
+	errorFmtSvc errorFormatterService
+	loggerSvc   *slog.Logger
+}
+
+// sdiOptFn is a function option used to configure a DI container instance
+type registryOptFn func(opts *registyOptionsParams) error
+
+func (opt registryOptFn) configureParams(opts *registyOptionsParams) error {
+	return opt(opts)
+}
+
+func RegistryErrFmtOpt(errFmtSvc errorFormatterService) RegistryOptions {
+	return registryOptFn(func(opts *registyOptionsParams) error {
+		var svc errorFormatterService = errFmtSvc
+
+		if svc == nil {
+			svc = defaultErrorsFmtSvc
+		}
+
+		opts.errorFmtSvc = svc
+
+		return nil
+	})
+}
+
+func RegistryLoggerOpt(loggerSvc *slog.Logger) RegistryOptions {
+	return registryOptFn(func(opts *registyOptionsParams) error {
+		var slogSvc *slog.Logger = loggerSvc
+
+		if slogSvc == nil {
+			slogSvc = slog.Default()
+		}
+
+		opts.loggerSvc = slogSvc
+
+		return nil
+	})
+}
+
 type conainerRegistry struct {
 	mu *sync.Mutex
 
@@ -75,12 +120,27 @@ func NewDependencyRegistry() *conainerRegistry {
 	}
 }
 
-func NewDependencyRegistryWith(errFmtSvc errorFormatterService) *conainerRegistry {
+func NewDependencyRegistryWith(containerOptions ...RegistryOptions) *conainerRegistry {
+	cfg := &registyOptionsParams{
+		errorFmtSvc: nil,
+		loggerSvc:   nil,
+	}
+
+	for _, opt := range containerOptions {
+		if opt == nil {
+			continue
+		}
+
+		if loopErr := opt.configureParams(cfg); loopErr != nil {
+			panic(defaultErrorsFmtSvc.ErrNoWrap(ErrUnableToConfigureParams))
+		}
+	}
+
 	return &conainerRegistry{
 		mu: &sync.Mutex{},
 
-		l: nil,
-		e: errFmtSvc,
+		l: cfg.loggerSvc,
+		e: cfg.errorFmtSvc,
 
 		list: make([]any, 0, DefaultRegistryBufferSize),
 		reg:  make(map[ContainerUnitType]uint32, DefaultRegistryBufferSize),

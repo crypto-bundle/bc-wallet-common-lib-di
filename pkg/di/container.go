@@ -32,38 +32,99 @@ package di
 
 import (
 	"errors"
+	"log/slog"
 )
 
 var (
 	ErrUnableToCastDependencyUnit  = errors.New("ubable to cast dependency unit")
 	ErrMissingRequiredDependencies = errors.New("missing required dependencies")
+	ErrUnableToConfigureParams     = errors.New("unable to configure params")
 )
 
-func DIMustWith[T any](dependenciesList ...any) *ConainerProvider[T] {
-	var (
-		errFmtSvc   errorFormatterService     = nil
-		registrySvc dependencyRegistryService = nil
-	)
+// SubOpt configures options for subscribing to JetStream consumers.
+type DIOptions interface {
+	configureParams(opts *diOptionsParams) error
+}
 
-	for _, depUnit := range dependenciesList {
-		switch castedDependency := depUnit.(type) {
-		case errorFormatterService:
-			errFmtSvc = castedDependency
-		case dependencyRegistryService:
-			registrySvc = castedDependency
+type diOptionsParams struct {
+	errorFmtSvc errorFormatterService
+	loggerSvc   *slog.Logger
+	registrySvc dependencyRegistryService
+}
 
-		default:
+// sdiOptFn is a function option used to configure a DI container instance
+type diOptFn func(opts *diOptionsParams) error
+
+func (opt diOptFn) configureParams(opts *diOptionsParams) error {
+	return opt(opts)
+}
+
+func ConErrorFormatterOpt(errFmtSvc errorFormatterService) DIOptions {
+	return diOptFn(func(opts *diOptionsParams) error {
+		var svc errorFormatterService = errFmtSvc
+
+		if svc == nil {
+			svc = defaultErrorsFmtSvc
+		}
+
+		opts.errorFmtSvc = svc
+
+		return nil
+	})
+}
+
+func ConLoggerOpt(loggerSvc *slog.Logger) DIOptions {
+	return diOptFn(func(opts *diOptionsParams) error {
+		var slogSvc *slog.Logger = loggerSvc
+
+		if slogSvc == nil {
+			slogSvc = slog.Default()
+		}
+
+		opts.loggerSvc = slogSvc
+
+		return nil
+	})
+}
+
+func ConRegistryOpt(registrySvc dependencyRegistryService) DIOptions {
+	return diOptFn(func(opts *diOptionsParams) error {
+		var svc dependencyRegistryService = registrySvc
+
+		if svc == nil {
+			svc = NewDependencyRegistry()
+		}
+
+		opts.registrySvc = svc
+
+		return nil
+	})
+}
+
+func DIMustWith[T any](containerOptions ...DIOptions) *ConainerProvider[T] {
+	cfg := &diOptionsParams{
+		errorFmtSvc: nil,
+		loggerSvc:   nil,
+		registrySvc: nil,
+	}
+
+	for _, opt := range containerOptions {
+		if opt == nil {
 			continue
+		}
+
+		if loopErr := opt.configureParams(cfg); loopErr != nil {
+			panic(defaultErrorsFmtSvc.ErrNoWrap(ErrUnableToConfigureParams))
 		}
 	}
 
-	if errFmtSvc == nil {
+	if cfg.errorFmtSvc == nil {
 		panic(defaultErrorsFmtSvc.Errorf(ErrMissingRequiredDependencies, "dep type: %s", "error formatter"))
 	}
 
-	if registrySvc == nil {
+	if cfg.registrySvc == nil {
 		panic(defaultErrorsFmtSvc.Errorf(ErrMissingRequiredDependencies, "dep type: %s", "dependencies registry"))
 	}
 
-	return newContainerProvider[T](errFmtSvc, registrySvc)
+	return newContainerProvider[T](cfg.errorFmtSvc, cfg.registrySvc)
 }
